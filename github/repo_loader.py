@@ -22,6 +22,12 @@ class RepoLoader:
             self
     ):
 
+        if not self.repo_url:
+            return (
+                False,
+                "PROMPT_HUB_REPO env variable is not set"
+            )
+
         repo_name = (
             self.repo_url
             .split("/")

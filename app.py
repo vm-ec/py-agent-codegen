@@ -24,6 +24,10 @@ from runtime.file_writer import (
     FileWriter
 )
 
+from runtime.zip_manager import (
+    ZipManager
+)
+
 # -------------------------
 # Page Config
 # -------------------------
@@ -38,7 +42,7 @@ st.set_page_config(
 # -------------------------
 
 st.title(
-    "🚀 Code Generator Agent"
+    "🚀 Copilot Code Generator Agent"
 )
 
 st.markdown(
@@ -48,7 +52,7 @@ st.markdown(
 )
 
 # -------------------------
-# Initialize Services
+# Services
 # -------------------------
 
 repo_loader = RepoLoader()
@@ -57,6 +61,10 @@ story_analyzer = StoryAnalyzer()
 
 project_builder = (
     ProjectBuilder()
+)
+
+zip_manager = (
+    ZipManager()
 )
 
 # -------------------------
@@ -71,6 +79,9 @@ if "chat_history" not in st.session_state:
 
 if "processing" not in st.session_state:
     st.session_state.processing = False
+
+if "zip_path" not in st.session_state:
+    st.session_state.zip_path = None
 
 # -------------------------
 # Sidebar
@@ -108,7 +119,7 @@ with st.sidebar:
                 st.error(message)
 
 # -------------------------
-# Prompt Hub Loading
+# Prompt Hub
 # -------------------------
 
 prompt_hub = None
@@ -229,7 +240,7 @@ if story and prompt_hub:
         try:
 
             # ---------------------
-            # Analyze Story
+            # Story Analysis
             # ---------------------
 
             with st.spinner(
@@ -252,7 +263,7 @@ if story and prompt_hub:
             )
 
             # ---------------------
-            # Execute Prompts
+            # Prompt Execution
             # ---------------------
 
             execution_engine = (
@@ -368,6 +379,29 @@ if story and prompt_hub:
                 project_path
             )
 
+            # ---------------------
+            # ZIP Project
+            # ---------------------
+
+            st.write(
+                "## Creating ZIP"
+            )
+
+            zip_path = (
+                zip_manager
+                .create_zip(
+                    project_path
+                )
+            )
+
+            st.session_state[
+                "zip_path"
+            ] = zip_path
+
+            st.success(
+                "✅ ZIP Created"
+            )
+
             st.write(
                 "### Generated Files"
             )
@@ -400,3 +434,32 @@ if story and prompt_hub:
         finally:
 
             st.session_state.processing = False
+
+# -------------------------
+# Download ZIP
+# -------------------------
+
+if (
+        st.session_state.zip_path
+        and
+        not st.session_state.processing
+):
+
+    with open(
+            st.session_state.zip_path,
+            "rb"
+    ) as file:
+
+        st.download_button(
+            label=
+            "⬇ Download Generated Project ZIP",
+
+            data=file,
+
+            file_name=
+            st.session_state.zip_path
+            .split("/")[-1],
+
+            mime=
+            "application/zip"
+        )
