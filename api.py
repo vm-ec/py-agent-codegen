@@ -325,7 +325,7 @@ push to a feature branch in your GitHub repo and raise a **Pull Request**.
 7. Raise Pull Request
 
 ### Requirements
-- `GITHUB_TOKEN` and `GITHUB_USERNAME` must be set in environment variables
+- `GITHUB1_TOKEN` and `GITHUB1_USERNAME` must be set in environment variables
     """,
     tags=["Code Generation"]
 )

@@ -4,7 +4,7 @@ import re
 import google.generativeai as genai
 
 from config.settings import (
-    settings
+    settings, generate_with_retry
 )
 
 
@@ -84,8 +84,8 @@ Story:
 """
 
         response = (
-            self.model
-            .generate_content(
+            generate_with_retry(
+                self.model,
                 prompt
             )
         )

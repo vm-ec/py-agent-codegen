@@ -4,7 +4,7 @@ import re
 import google.generativeai as genai
 
 from config.settings import (
-    settings
+    settings, generate_with_retry
 )
 
 
@@ -360,8 +360,8 @@ Return STRICT JSON:
         try:
 
             response = (
-                self.model
-                .generate_content(
+                generate_with_retry(
+                    self.model,
                     final_prompt
                 )
             )
@@ -369,17 +369,31 @@ Return STRICT JSON:
             if not response or not response.text:
                 print(
                     f"[ExecutionEngine] "
-                    f"Empty response for step: {step_name}"
+                    f"Empty response for step: {step_name} "
+                    f"- possible quota exhaustion or prompt too large"
                 )
                 return []
 
         except Exception as e:
 
-            print(
-                f"[ExecutionEngine] "
-                f"Gemini API error for step "
-                f"{step_name}: {str(e)}"
-            )
+            error_msg = str(e)
+
+            if "429" in error_msg or "quota" in error_msg.lower():
+                print(
+                    f"[ExecutionEngine] "
+                    f"API quota exhausted for step: {step_name}"
+                )
+            elif "400" in error_msg or "too large" in error_msg.lower():
+                print(
+                    f"[ExecutionEngine] "
+                    f"Prompt too large for step: {step_name}"
+                )
+            else:
+                print(
+                    f"[ExecutionEngine] "
+                    f"Gemini API error for step {step_name}: {error_msg}"
+                )
+
             return []
 
         cleaned_response = (

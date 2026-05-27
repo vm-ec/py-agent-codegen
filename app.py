@@ -287,7 +287,7 @@ Provide a clear, concise explanation.
 """
                 import json as _json
                 import google.generativeai as genai
-                from config.settings import settings
+                from config.settings import settings, generate_with_retry
 
                 genai.configure(
                     api_key=settings.GEMINI_API_KEY
@@ -297,7 +297,8 @@ Provide a clear, concise explanation.
                     settings.MODEL_NAME
                 )
 
-                response = model.generate_content(
+                response = generate_with_retry(
+                    model,
                     explain_prompt
                 )
 
@@ -603,6 +604,12 @@ Provide a clear, concise explanation.
                                 story_analysis
                             )
                         )
+
+                        if not files:
+                            st.warning(
+                                f"⚠️ No files generated for `{step}` "
+                                f"— possible API quota exhaustion or prompt too large"
+                            )
 
                         execution_result[step] = files
 

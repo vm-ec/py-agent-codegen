@@ -63,6 +63,9 @@ class ProjectAnalyzer:
             "has_generic_response":
                 False,
 
+            "has_dto":
+                False,
+
             "java_files":
                 []
         }
@@ -256,6 +259,10 @@ class ProjectAnalyzer:
                     ].append(
                         file_path
                     )
+
+                    analysis[
+                        "has_dto"
+                    ] = True
 
                 # -------------------------
                 # Exception

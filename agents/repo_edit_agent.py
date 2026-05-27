@@ -2,7 +2,7 @@ import json
 import google.generativeai as genai
 
 from config.settings import (
-    settings
+    settings, generate_with_retry
 )
 
 
@@ -48,7 +48,8 @@ class RepoEditAgent:
         )
 
         response = (
-            self.model.generate_content(
+            generate_with_retry(
+                self.model,
                 prompt
             )
         )
@@ -147,58 +148,81 @@ class RepoEditAgent:
             )
         )
 
+        domain_lower = target_domain.lower()
+        domain_package = f"{base_package}.{domain_lower}"
+
+        has_service_impl = project_analysis.get(
+            "has_service_impl", False
+        )
+
+        has_dto = project_analysis.get(
+            "has_dto", False
+        )
+
+        has_mapstruct = project_analysis.get(
+            "has_mapstruct", False
+        )
+
+        # Build mandatory files list
+        mandatory_files = [
+            f"{target_domain}.java"
+        ]
+
+        if has_dto:
+            mandatory_files.append(
+                f"{target_domain}Request.java"
+            )
+            mandatory_files.append(
+                f"{target_domain}Response.java"
+            )
+
+        if has_mapstruct:
+            mandatory_files.append(
+                f"{target_domain}Mapper.java"
+            )
+
+        mandatory_files.append(
+            f"{target_domain}Repository.java"
+        )
+
+        mandatory_files.append(
+            f"{target_domain}Service.java"
+        )
+
+        if has_service_impl:
+            mandatory_files.append(
+                f"{target_domain}ServiceImpl.java"
+            )
+
+        # Exception always generated
+        mandatory_files.append(
+            f"{target_domain}NotFoundException.java"
+        )
+
+        mandatory_files.append(
+            f"{target_domain}Controller.java"
+        )
+
+        mandatory_files.append(
+            f"{target_domain}ControllerTests.java"
+        )
+
+        mandatory_files_str = "\n".join(
+            [f"  - {f}" for f in mandatory_files]
+        )
+
         repo_context = {
-
-            "base_package":
-                base_package,
-
-            "spring_boot":
-                project_analysis.get(
-                    "spring_boot"
-                ),
-
-            "has_lombok":
-                project_analysis.get(
-                    "has_lombok"
-                ),
-
-            "has_swagger":
-                project_analysis.get(
-                    "has_swagger"
-                ),
-
-            "has_mapstruct":
-                project_analysis.get(
-                    "has_mapstruct"
-                ),
-
-            "has_service_impl":
-                project_analysis.get(
-                    "has_service_impl"
-                ),
-
-            "has_generic_response":
-                project_analysis.get(
-                    "has_generic_response"
-                ),
-
-            "controllers":
-                project_analysis.get(
-                    "controllers",
-                    []
-                ),
-
-            "repositories":
-                project_analysis.get(
-                    "repositories",
-                    []
-                ),
-
-            "configs":
-                project_analysis.get(
-                    "configs",
-                    []
-                )
+            "base_package": base_package,
+            "domain_package": domain_package,
+            "spring_boot": project_analysis.get("spring_boot"),
+            "has_lombok": project_analysis.get("has_lombok"),
+            "has_swagger": project_analysis.get("has_swagger"),
+            "has_mapstruct": has_mapstruct,
+            "has_dto": has_dto,
+            "has_service_impl": has_service_impl,
+            "has_generic_response": project_analysis.get("has_generic_response"),
+            "controllers": project_analysis.get("controllers", []),
+            "repositories": project_analysis.get("repositories", [])
         }
 
         prompt_hub_context = (
@@ -208,13 +232,10 @@ class RepoEditAgent:
         return f"""
 You are a senior Java Spring Boot architect.
 
-You are modifying an EXISTING repository.
+You are adding a NEW MODULE to an EXISTING repository.
 
-Your PRIMARY coding standards
-come from Prompt Hub.
-
-You MUST adapt generated code
-to match the existing repository style.
+Your coding standards come from the Prompt Hub below.
+You MUST adapt the generated code to match the existing repository style.
 
 =================================================
 PROMPT HUB STANDARDS
@@ -229,59 +250,72 @@ REPOSITORY CONTEXT
 {json.dumps(repo_context, indent=2)}
 
 =================================================
-TARGET DOMAIN
-=================================================
-
-{target_domain}
-
-=================================================
 USER REQUEST
 =================================================
 
 {user_prompt}
 
 =================================================
-VERY IMPORTANT RULES
+TARGET DOMAIN: {target_domain}
+TARGET PACKAGE: {domain_package}
 =================================================
 
-1. Follow repository style FIRST.
+=================================================
+MANDATORY FILES — YOU MUST GENERATE ALL OF THESE
+=================================================
 
-2. Reuse existing architecture.
+{mandatory_files_str}
 
-3. Follow existing controller style.
-
-4. Follow existing repository style.
-
-5. Follow existing package structure.
-
-6. DO NOT create DTOs unless repository uses DTOs.
-
-7. DO NOT create ServiceImpl unless repo uses it.
-
-8. DO NOT generate REST APIs if repo uses MVC.
-
-9. Reuse existing patterns from repo.
-
-10. Generate ONLY required files.
-
-11. Return ONLY JSON.
-
-12. Every file must contain FULL CODE.
+Do NOT skip any of the above files.
+Do NOT generate partial implementations.
+Every file MUST contain COMPLETE, COMPILABLE Java code.
 
 =================================================
-OUTPUT FORMAT
+STRICT RULES
+=================================================
+
+1. Generate ALL mandatory files listed above — no exceptions.
+2. Follow the existing repository style exactly.
+3. Use the same patterns as existing controllers, services, repositories.
+4. All files MUST be in package: {domain_package}
+5. If has_lombok is true — use Lombok annotations.
+6. If has_service_impl is true — generate both Service interface and ServiceImpl.
+7. If has_swagger is true — add Swagger annotations to controller.
+8. Controller MUST follow existing MVC or REST style of the repo.
+9. Repository MUST follow existing repository pattern of the repo.
+10. Tests MUST use MockMvc and Mockito following existing test patterns.
+11. Return ONLY a valid JSON array.
+12. NO markdown, NO explanations outside JSON.
+
+=================================================
+OUTPUT FORMAT — RETURN EXACTLY THIS STRUCTURE
 =================================================
 
 [
   {{
-    "file_name":
-    "VehicleController.java",
-
-    "package":
-    "{base_package}.{target_domain.lower()}",
-
-    "content":
-    "full java code"
+    "file_name": "{target_domain}.java",
+    "package": "{domain_package}",
+    "content": "full java code here"
+  }},
+  {{
+    "file_name": "{target_domain}Repository.java",
+    "package": "{domain_package}",
+    "content": "full java code here"
+  }},
+  {{
+    "file_name": "{target_domain}Service.java",
+    "package": "{domain_package}",
+    "content": "full java code here"
+  }},
+  {{
+    "file_name": "{target_domain}Controller.java",
+    "package": "{domain_package}",
+    "content": "full java code here"
+  }},
+  {{
+    "file_name": "{target_domain}ControllerTests.java",
+    "package": "{domain_package}",
+    "content": "full java code here"
   }}
 ]
 """

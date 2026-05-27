@@ -1,7 +1,7 @@
 import json
 import google.generativeai as genai
 
-from config.settings import settings
+from config.settings import settings, generate_with_retry
 
 
 class Orchestrator:
@@ -104,7 +104,8 @@ Respond with STRICT JSON only:
 
         try:
 
-            response = self.model.generate_content(
+            response = generate_with_retry(
+                self.model,
                 prompt
             )
 

@@ -14,11 +14,11 @@ class GitManager:
     def __init__(self):
 
         self.github_token = (
-            settings.GITHUB_TOKEN
+            settings.GITHUB1_TOKEN
         )
 
         self.github_username = (
-            settings.GITHUB_USERNAME
+            settings.GITHUB1_USERNAME
         )
 
     # ----------------------------------
