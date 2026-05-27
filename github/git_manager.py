@@ -1,0 +1,425 @@
+import os
+import re
+import requests
+
+from git import Repo
+
+from config.settings import (
+    settings
+)
+
+
+class GitManager:
+
+    def __init__(self):
+
+        self.github_token = (
+            settings.GITHUB_TOKEN
+        )
+
+        self.github_username = (
+            settings.GITHUB_USERNAME
+        )
+
+    # ----------------------------------
+    # Generate Feature Branch Name
+    # ----------------------------------
+
+    def generate_branch_name(
+            self,
+            user_prompt
+    ):
+
+        slug = (
+            user_prompt
+            .lower()
+            .strip()
+        )
+
+        slug = re.sub(
+            r"[^a-z0-9\s]",
+            "",
+            slug
+        )
+
+        slug = re.sub(
+            r"\s+",
+            "-",
+            slug
+        )
+
+        slug = slug[:40].strip("-")
+
+        return f"feature/{slug}"
+
+    # ----------------------------------
+    # Create Feature Branch
+    # ----------------------------------
+
+    def create_feature_branch(
+            self,
+            repo_path,
+            branch_name
+    ):
+
+        repo = Repo(repo_path)
+
+        # If branch already exists, just checkout
+        if branch_name in repo.heads:
+            repo.git.checkout(branch_name)
+        else:
+            repo.git.checkout("-b", branch_name)
+
+        return branch_name
+
+    # ----------------------------------
+    # Commit Changes
+    # ----------------------------------
+
+    def commit_changes(
+            self,
+            repo_path,
+            branch_name,
+            user_prompt
+    ):
+
+        repo = Repo(repo_path)
+
+        # Configure git user
+        repo.config_writer().set_value(
+            "user", "name", self.github_username
+        ).release()
+
+        repo.config_writer().set_value(
+            "user", "email",
+            f"{self.github_username}@users.noreply.github.com"
+        ).release()
+
+        repo.git.add("--all")
+
+        commit_message = (
+            f"feat: {user_prompt[:72]}"
+        )
+
+        repo.index.commit(commit_message)
+
+        return commit_message
+
+    # ----------------------------------
+    # Push to Your GitHub Repo
+    # ----------------------------------
+
+    def push_to_your_repo(
+            self,
+            repo_path,
+            repo_name,
+            branch_name
+    ):
+
+        remote_url = (
+            f"https://{self.github_token}"
+            f"@github.com/"
+            f"{self.github_username}"
+            f"/{repo_name}.git"
+        )
+
+        repo = Repo(repo_path)
+
+        # Remove existing remote if any
+        try:
+            repo.delete_remote("target")
+        except Exception:
+            pass
+
+        repo.create_remote("target", remote_url)
+
+        # Use git command directly for reliable force push
+        repo.git.push(
+            "target",
+            f"{branch_name}:{branch_name}",
+            force=True
+        )
+
+        return (
+            f"https://github.com/"
+            f"{self.github_username}"
+            f"/{repo_name}"
+        )
+
+    # ----------------------------------
+    # Create GitHub Repo If Not Exists
+    # ----------------------------------
+
+    def ensure_github_repo_exists(
+            self,
+            repo_name
+    ):
+
+        import time
+
+        headers = {
+            "Authorization":
+                f"token {self.github_token}",
+
+            "Accept":
+                "application/vnd.github.v3+json"
+        }
+
+        # Check if repo exists
+        check_url = (
+            f"https://api.github.com/repos/"
+            f"{self.github_username}/{repo_name}"
+        )
+
+        response = requests.get(
+            check_url,
+            headers=headers
+        )
+
+        if response.status_code == 200:
+            return True
+
+        # Create repo without auto_init
+        # to avoid unrelated histories conflict
+        create_url = (
+            "https://api.github.com/user/repos"
+        )
+
+        payload = {
+            "name": repo_name,
+            "private": False,
+            "auto_init": False
+        }
+
+        response = requests.post(
+            create_url,
+            headers=headers,
+            json=payload
+        )
+
+        # Wait for GitHub to initialize the repo
+        time.sleep(3)
+
+        return (
+            response.status_code == 201
+        )
+
+    # ----------------------------------
+    # Raise Pull Request
+    # ----------------------------------
+
+    def raise_pull_request(
+            self,
+            repo_name,
+            branch_name,
+            user_prompt
+    ):
+
+        headers = {
+            "Authorization":
+                f"token {self.github_token}",
+
+            "Accept":
+                "application/vnd.github.v3+json"
+        }
+
+        url = (
+            f"https://api.github.com/repos/"
+            f"{self.github_username}"
+            f"/{repo_name}/pulls"
+        )
+
+        payload = {
+            "title":
+                f"feat: {user_prompt[:72]}",
+
+            "body":
+                (
+                    "Auto-generated by "
+                    "Code Generator Agent\n\n"
+                    f"**Request:** {user_prompt}"
+                ),
+
+            "head": branch_name,
+
+            "base": "main"
+        }
+
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload
+        )
+
+        if response.status_code == 201:
+
+            return {
+                "success": True,
+                "pr_url": (
+                    response.json()
+                    .get("html_url")
+                )
+            }
+
+        # Try master if main fails
+        payload["base"] = "master"
+
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload
+        )
+
+        if response.status_code == 201:
+
+            return {
+                "success": True,
+                "pr_url": (
+                    response.json()
+                    .get("html_url")
+                )
+            }
+
+        return {
+            "success": False,
+            "error": response.text
+        }
+
+    # ----------------------------------
+    # Full Flow
+    # ----------------------------------
+
+    def push_and_raise_pr(
+            self,
+            repo_path,
+            repo_name,
+            user_prompt
+    ):
+
+        try:
+
+            branch_name = (
+                self.generate_branch_name(
+                    user_prompt
+                )
+            )
+
+            # Re-init git to strip original
+            # history — avoids unrelated histories
+            import shutil
+            import stat
+
+            git_dir = os.path.join(
+                repo_path, ".git"
+            )
+
+            def force_remove(func, path, exc):
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+
+            if os.path.exists(git_dir):
+                shutil.rmtree(
+                    git_dir,
+                    onerror=force_remove
+                )
+
+            # Fresh git init
+            repo = Repo.init(repo_path)
+
+            # Configure git user
+            repo.config_writer().set_value(
+                "user", "name",
+                self.github_username
+            ).release()
+
+            repo.config_writer().set_value(
+                "user", "email",
+                f"{self.github_username}"
+                f"@users.noreply.github.com"
+            ).release()
+
+            # Stage all files except workflows
+            repo.git.add("--all")
+
+            # Unstage workflow files to avoid
+            # requiring workflow scope on token
+            try:
+                repo.git.rm(
+                    "-r",
+                    "--cached",
+                    ".github/workflows"
+                )
+            except Exception:
+                pass
+
+            # Initial commit on main
+            repo.index.commit(
+                f"feat: {user_prompt[:72]}"
+            )
+
+            # Rename default branch to main
+            repo.git.branch("-M", "main")
+
+            # Create feature branch from main
+            repo.git.checkout("-b", branch_name)
+
+            # Ensure GitHub repo exists
+            self.ensure_github_repo_exists(
+                repo_name
+            )
+
+            # Set remote and push
+            remote_url = (
+                f"https://{self.github_token}"
+                f"@github.com/"
+                f"{self.github_username}"
+                f"/{repo_name}.git"
+            )
+
+            remote = repo.create_remote(
+                "origin", remote_url
+            )
+
+            # Push main first
+            repo.git.push(
+                "origin",
+                "main",
+                force=True
+            )
+
+            # Push feature branch
+            repo.git.push(
+                "origin",
+                f"{branch_name}:{branch_name}",
+                force=True
+            )
+
+            # Raise PR
+            pr_result = (
+                self.raise_pull_request(
+                    repo_name,
+                    branch_name,
+                    user_prompt
+                )
+            )
+
+            return {
+                "success": True,
+                "branch": branch_name,
+                "pr_url": pr_result.get("pr_url")
+            }
+
+        except Exception as e:
+
+            print(
+                f"[GitManager] "
+                f"push_and_raise_pr failed: {str(e)}"
+            )
+
+            import traceback
+            print(traceback.format_exc())
+
+            return {
+                "success": False,
+                "error": str(e)
+            }

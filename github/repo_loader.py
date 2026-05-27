@@ -1,4 +1,7 @@
 import os
+import stat
+import shutil
+
 from git import Repo
 
 from config.settings import (
@@ -10,111 +13,141 @@ class RepoLoader:
 
     def __init__(self):
 
-        self.repo_url = (
+        self.workspace_path = (
+            "workspace"
+        )
+
+        self.linked_projects_path = (
+            os.path.join(
+                self.workspace_path,
+                "linked_projects"
+            )
+        )
+
+        self.prompt_hub_repo = (
             settings.PROMPT_HUB_REPO
         )
 
-        self.local_path = (
-            settings.PROMPT_HUB_PATH
+        os.makedirs(
+            self.workspace_path,
+            exist_ok=True
         )
 
-    def clone_repo_if_needed(
-            self
-    ):
+        os.makedirs(
+            self.linked_projects_path,
+            exist_ok=True
+        )
 
-        if not self.repo_url:
+    # ----------------------------------
+    # Prompt Hub Clone
+    # ----------------------------------
+
+    def clone_repo_if_needed(self):
+
+        if not self.prompt_hub_repo:
             return (
                 False,
                 "PROMPT_HUB_REPO env variable is not set"
             )
 
-        repo_name = (
-            self.repo_url
-            .split("/")
-            [-1]
-            .replace(".git", "")
+        prompt_hub_path = (
+            self.get_prompt_hub_path()
         )
-
-        repo_path = os.path.join(
-            self.local_path,
-            repo_name
-        )
-
-        os.makedirs(
-            self.local_path,
-            exist_ok=True
-        )
-
-        if os.path.exists(repo_path):
-
-            return (
-                True,
-                f"Prompt Hub already loaded:\n"
-                f"{repo_path}"
-            )
 
         try:
 
+            if os.path.exists(
+                    prompt_hub_path
+            ):
+
+                return (
+                    True,
+                    "Prompt Hub already loaded"
+                )
+
             Repo.clone_from(
-                self.repo_url,
+                self.prompt_hub_repo,
+                prompt_hub_path
+            )
+
+            return (
+                True,
+                "Prompt Hub loaded successfully"
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                str(e)
+            )
+
+    # ----------------------------------
+    # Prompt Hub Path
+    # ----------------------------------
+
+    def get_prompt_hub_path(self):
+
+        return os.path.join(
+            self.workspace_path,
+            "prompt_hub"
+        )
+
+    # ----------------------------------
+    # Clone User Repo
+    # ----------------------------------
+
+    def clone_user_repo(
+            self,
+            repo_url
+    ):
+
+        try:
+
+            repo_name = (
+                repo_url
+                .rstrip("/")
+                .split("/")[-1]
+                .replace(".git", "")
+            )
+
+            repo_path = os.path.join(
+                self.linked_projects_path,
+                repo_name
+            )
+
+            if os.path.exists(repo_path):
+
+                def force_remove(
+                        func,
+                        path,
+                        exc
+                ):
+                    os.chmod(
+                        path,
+                        stat.S_IWRITE
+                    )
+                    func(path)
+
+                shutil.rmtree(
+                    repo_path,
+                    onerror=force_remove
+                )
+
+            Repo.clone_from(
+                repo_url,
                 repo_path
             )
 
-            return (
-                True,
-                f"Prompt Hub cloned:\n"
-                f"{repo_path}"
-            )
+            return {
+                "success": True,
+                "repo_name": repo_name,
+                "repo_path": repo_path
+            }
 
         except Exception as e:
 
-            return (
-                False,
-                f"Clone failed:\n"
-                f"{str(e)}"
-            )
-
-    def refresh_repo(self):
-
-        try:
-
-            repo_path = (
-                self.get_prompt_hub_path()
-            )
-
-            repo = Repo(repo_path)
-
-            origin = (
-                repo.remotes.origin
-            )
-
-            origin.pull()
-
-            return (
-                True,
-                "Prompt Hub updated"
-            )
-
-        except Exception as e:
-
-            return (
-                False,
-                f"Refresh failed:\n"
-                f"{str(e)}"
-            )
-
-    def get_prompt_hub_path(
-            self
-    ):
-
-        repo_name = (
-            self.repo_url
-            .split("/")
-            [-1]
-            .replace(".git", "")
-        )
-
-        return os.path.join(
-            self.local_path,
-            repo_name
-        )
+            return {
+                "success": False,
+                "error": str(e)
+            }

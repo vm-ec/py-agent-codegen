@@ -95,27 +95,23 @@ class ExecutionEngine:
             response_text
     ):
 
-        response_text = (
-            response_text.strip()
-        )
+        response_text = response_text.strip()
 
+        # Remove ```json ... ``` or ``` ... ```
         response_text = re.sub(
-            r"^```json",
+            r"^```[a-zA-Z]*\s*",
             "",
             response_text,
             flags=re.IGNORECASE
         )
 
         response_text = re.sub(
-            r"```$",
+            r"```\s*$",
             "",
             response_text
         )
 
-        return (
-            response_text
-            .strip()
-        )
+        return response_text.strip()
 
     def get_dependency_files(
             self,
@@ -271,6 +267,62 @@ Return STRICT JSON:
 }}
 """
 
+    def extract_files_manually(
+            self,
+            response_text
+    ):
+
+        files = []
+
+        # Match each file block by file_name
+        file_name_pattern = re.findall(
+            r'"file_name"\s*:\s*"([^"]+)"',
+            response_text
+        )
+
+        folder_pattern = re.findall(
+            r'"folder"\s*:\s*"([^"]+)"',
+            response_text
+        )
+
+        # Extract content between "content": " and next "
+        content_pattern = re.findall(
+            r'"content"\s*:\s*"(.*?)"(?=\s*[,}])',
+            response_text,
+            re.DOTALL
+        )
+
+        for i, file_name in enumerate(
+                file_name_pattern
+        ):
+
+            folder = (
+                folder_pattern[i]
+                if i < len(folder_pattern)
+                else "misc"
+            )
+
+            content = (
+                content_pattern[i]
+                .replace("\\n", "\n")
+                .replace("\\t", "\t")
+                .replace("\\\"", "\"")
+                if i < len(content_pattern)
+                else ""
+            )
+
+            files.append(
+                {
+                    "file_name": file_name,
+                    "folder": folder,
+                    "content": content
+                }
+            )
+
+        self.generated_files.extend(files)
+
+        return files
+
     def execute_step(
             self,
             step_name,
@@ -305,12 +357,30 @@ Return STRICT JSON:
             )
         )
 
-        response = (
-            self.model
-            .generate_content(
-                final_prompt
+        try:
+
+            response = (
+                self.model
+                .generate_content(
+                    final_prompt
+                )
             )
-        )
+
+            if not response or not response.text:
+                print(
+                    f"[ExecutionEngine] "
+                    f"Empty response for step: {step_name}"
+                )
+                return []
+
+        except Exception as e:
+
+            print(
+                f"[ExecutionEngine] "
+                f"Gemini API error for step "
+                f"{step_name}: {str(e)}"
+            )
+            return []
 
         cleaned_response = (
             self.clean_response(
@@ -342,15 +412,30 @@ Return STRICT JSON:
 
         except Exception:
 
-            return [
-                {
-                    "error":
-                    "JSON Parse Failed",
+            # Try strict=False to handle
+            # unescaped control characters
+            try:
 
-                    "raw_response":
+                parsed_response = json.loads(
+                    cleaned_response,
+                    strict=False
+                )
+
+                files = parsed_response.get(
+                    "files", []
+                )
+
+                self.generated_files.extend(files)
+
+                return files
+
+            except Exception:
+
+                # Last resort — use regex to
+                # extract each file block manually
+                return self.extract_files_manually(
                     cleaned_response
-                }
-            ]
+                )
 
     def execute(
             self,

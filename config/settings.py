@@ -19,6 +19,14 @@ class Settings:
         "gemini-2.0-flash"
     )
 
+    GITHUB_TOKEN = os.getenv(
+        "GITHUB_TOKEN"
+    )
+
+    GITHUB_USERNAME = os.getenv(
+        "GITHUB_USERNAME"
+    )
+
     PROMPT_HUB_PATH = (
         "workspace/prompt_hub"
     )
