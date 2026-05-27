@@ -1,4 +1,10 @@
 import streamlit as st
+import sys
+
+# Force logs to appear in Render
+print("========== APP STARTING ==========", flush=True)
+print(f"Python version: {sys.version}", flush=True)
+print("==================================", flush=True)
 
 from github.repo_loader import RepoLoader
 from agents.story_analyzer import StoryAnalyzer
