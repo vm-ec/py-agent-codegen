@@ -1,6 +1,7 @@
 from typing import Optional
+import sys
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -14,6 +15,10 @@ from runtime.zip_manager import ZipManager
 from runtime.project_analyzer import ProjectAnalyzer
 from runtime.impact_analyzer import ImpactAnalyzer
 from runtime.edit_engine import EditEngine
+
+print("========== API STARTING ==========", flush=True)
+print(f"Python version: {sys.version}", flush=True)
+print("==================================", flush=True)
 
 app = FastAPI(
     title="Code Generator Agent",
@@ -43,6 +48,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"\n🔵 INCOMING REQUEST: {request.method} {request.url.path}", flush=True)
+    response = await call_next(request)
+    print(f"🟢 RESPONSE STATUS: {response.status_code}", flush=True)
+    return response
+
 
 repo_loader = RepoLoader()
 story_analyzer = StoryAnalyzer()
