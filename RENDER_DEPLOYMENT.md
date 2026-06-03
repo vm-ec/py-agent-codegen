@@ -34,21 +34,18 @@ Set these in Render Dashboard → Your Service → Environment tab:
 ```bash
 GEMINI_API_KEY=<your-gemini-api-key>
 PROMPT_HUB_REPO=https://github.com/saikumar0210/prompt-hub-agent.git
-MODEL_NAME=gemini-1.5-flash
+MODEL_NAME=gemini-2.5-flash
 GITHUB1_TOKEN=<your-github-token>
 GITHUB1_USERNAME=saireddy-collab
-PORT=8501
+PORT=8000
 ```
 
 ### Deployment Configuration
 
-**For Streamlit (app.py):**
-- Build Command: `pip install -r requirements.txt`
-- Start Command: `streamlit run app.py --server.port=$PORT --server.address=0.0.0.0`
-
-**For FastAPI (api.py):**
+**For FastAPI (api.py) — Active:**
 - Build Command: `pip install -r requirements.txt`
 - Start Command: `uvicorn api:app --host 0.0.0.0 --port $PORT`
+- Port: `8000`
 
 ---
 
