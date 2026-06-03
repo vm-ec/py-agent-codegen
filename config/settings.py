@@ -20,7 +20,7 @@ class Settings:
 
     MODEL_NAME = os.getenv(
         "MODEL_NAME",
-        "gemini-2.0-flash"
+        "gemini-1.5-flash-latest"
     )
 
     GITHUB1_TOKEN = os.getenv(
