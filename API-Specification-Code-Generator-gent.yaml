@@ -18,11 +18,38 @@ paths:
               properties:
                 story:
                   type: string
+                  description: "Story or specifications for the new project"
+                  example: "Create a student management system with CRUD operations"
                 limit:
                   type: integer
+                  description: "Optional limit parameter"
+                  example: 10
       responses:
         '200':
           description: "Success response containing dynamic output payload"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  project_name:
+                    type: string
+                    example: "StudentManagement"
+                  branch:
+                    type: string
+                    example: "main"
+                  write_results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        file:
+                          type: string
+                        status:
+                          type: string
 
   /edit:
     post:
@@ -36,10 +63,39 @@ paths:
               properties:
                 repo_url:
                   type: string
+                  description: "Public GitHub repository URL"
+                  example: "https://github.com/spring-projects/spring-petclinic"
                 instructions:
                   type: string
+                  description: "Instructions for changes to make"
+                  example: "Add vehicle management module"
                 limit:
                   type: integer
+                  description: "Optional limit parameter"
+                  example: 10
       responses:
         '200':
           description: "Success response containing dynamic output payload"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  project_name:
+                    type: string
+                    example: "spring-petclinic"
+                  branch:
+                    type: string
+                    example: "feature/add-vehicle-module"
+                  write_results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        file:
+                          type: string
+                        status:
+                          type: string
