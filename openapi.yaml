@@ -22,6 +22,11 @@ paths:
                 story:
                   type: string
                   description: "Story or specifications for the new project"
+                  example: "Create a student management system with CRUD operations"
+                limit:
+                  type: integer
+                  description: "Optional limit parameter"
+                  example: 10
       responses:
         '200':
           description: "Success response containing generated project details"
@@ -32,12 +37,16 @@ paths:
                 properties:
                   status:
                     type: string
+                    example: "success"
                   project_name:
                     type: string
+                    example: "StudentManagement"
                   project_path:
                     type: string
+                    example: "generated_projects/StudentManagement"
                   zip_path:
                     type: string
+                    example: "generated_projects/StudentManagement.zip"
                   write_results:
                     type: array
                     items:
@@ -60,9 +69,15 @@ paths:
                 repo_url:
                   type: string
                   description: "Public GitHub repository URL to edit"
+                  example: "https://github.com/spring-projects/spring-petclinic"
                 instructions:
                   type: string
                   description: "Instructions describing what changes to make"
+                  example: "Add a vehicle management module with CRUD APIs"
+                limit:
+                  type: integer
+                  description: "Optional limit parameter"
+                  example: 10
       responses:
         '200':
           description: "Success response containing edit result and PR details"
@@ -73,14 +88,19 @@ paths:
                 properties:
                   status:
                     type: string
+                    example: "success"
                   repo_name:
                     type: string
+                    example: "spring-petclinic"
                   branch:
                     type: string
+                    example: "feature/add-vehicle-management"
                   pr_url:
                     type: string
+                    example: "https://github.com/user/repo/pull/1"
                   pr_success:
                     type: boolean
+                    example: true
                   write_results:
                     type: array
                     items:
@@ -100,3 +120,4 @@ paths:
                 properties:
                   status:
                     type: string
+                    example: "ok"
