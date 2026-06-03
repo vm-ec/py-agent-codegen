@@ -1,0 +1,125 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Code Generator Agent",
+    "version": "1.0.0",
+    "description": "Enterprise agent that generates new projects and edits existing GitHub repositories using your Prompt Hub as the coding standard."
+  },
+  "servers": [
+    {
+      "url": "https://code-generator-wfye.onrender.com"
+    }
+  ],
+  "paths": {
+    "/generate": {
+      "post": {
+        "summary": "Generate New Project",
+        "operationId": "generateProject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["story"],
+                "properties": {
+                  "story": {
+                    "type": "string",
+                    "description": "Story or specifications for the new project"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success response containing generated project details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "project_name": { "type": "string" },
+                    "project_path": { "type": "string" },
+                    "zip_path": { "type": "string" },
+                    "write_results": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/edit": {
+      "post": {
+        "summary": "Edit Existing GitHub Repository",
+        "operationId": "editProject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["repo_url", "instructions"],
+                "properties": {
+                  "repo_url": {
+                    "type": "string",
+                    "description": "Public GitHub repository URL to edit"
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "description": "Instructions describing what changes to make"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success response containing edit result and PR details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "repo_name": { "type": "string" },
+                    "branch": { "type": "string" },
+                    "pr_url": { "type": "string" },
+                    "pr_success": { "type": "boolean" },
+                    "write_results": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Service is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

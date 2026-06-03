@@ -1,0 +1,31 @@
+ui_preferences:
+  inputs:
+    - name: "story"
+      label: "Project Story / Specifications"
+      component_type: "textarea"
+      placeholder: "e.g. Create a policy admin system with CRUD operations"
+      default: "Create a Claims Fraud check system with CRUD operations"
+
+    - name: "repo_url"
+      label: "GitHub Repository URL"
+      component_type: "text"
+      placeholder: "e.g. https://github.com/org/project"
+      default: ""
+
+  outputs:
+    data_mapping:
+      - key: "status"
+        label: "Generation Status"
+        widget: "metric_card"
+
+      - key: "project_name"
+        label: "Project Name"
+        widget: "metric_card"
+
+      - key: "branch"
+        label: "Feature Branch"
+        widget: "metric_card"
+
+      - key: "write_results"
+        label: "Generated Files"
+        widget: "data_table"
