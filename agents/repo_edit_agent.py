@@ -1,4 +1,6 @@
 import json
+import html
+import re
 import google.generativeai as genai
 
 from config.settings import (
@@ -73,55 +75,43 @@ class RepoEditAgent:
         )
 
         try:
-
-            # -----------------------------
-            # First Attempt
-            # -----------------------------
-
-            return json.loads(
-                cleaned_response
-            )
-
+            return json.loads(cleaned_response)
         except Exception:
-
             try:
+                return json.loads(cleaned_response, strict=False)
+            except Exception:
+                return self.extract_files_by_regex(cleaned_response)
 
-                # -----------------------------
-                # Safe Fallback Parse
-                # -----------------------------
+    # ----------------------------------
+    # Regex Fallback Extractor
+    # ----------------------------------
 
-                safe_response = (
-                    cleaned_response
-                    .replace(
-                        "\r",
-                        ""
-                    )
-                    .replace(
-                        "\t",
-                        "    "
-                    )
-                )
+    def extract_files_by_regex(self, text):
 
-                return json.loads(
-                    safe_response,
-                    strict=False
-                )
+        files = []
 
-            except Exception as e:
+        file_names = re.findall(r'"file_name"\s*:\s*"([^"]+)"', text)
+        packages = re.findall(r'"package"\s*:\s*"([^"]+)"', text)
+        contents = re.findall(r'"content"\s*:\s*"(.*?)"(?=\s*[,}])', text, re.DOTALL)
 
-                return [
+        for i, file_name in enumerate(file_names):
+            content = (
+                contents[i]
+                .replace("\\n", "\n")
+                .replace("\\t", "\t")
+                .replace("\\\"", "\"")
+                if i < len(contents) else ""
+            )
+            files.append({
+                "file_name": file_name,
+                "package": packages[i] if i < len(packages) else "",
+                "content": content
+            })
 
-                    {
-                        "status":
-                            "failed",
+        if not files:
+            return [{"status": "failed", "error": "Could not parse AI response", "raw": text}]
 
-                        "error":
-                            str(e),
-
-                        "raw":
-                            raw_text
-                    }
-                ]
+        return files
 
     # ----------------------------------
     # Build Prompt
@@ -436,5 +426,8 @@ OUTPUT FORMAT — RETURN EXACTLY THIS STRUCTURE
             )
             .strip()
         )
+
+        # Fix HTML entities first
+        text = html.unescape(text)
 
         return text

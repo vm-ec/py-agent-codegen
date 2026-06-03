@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from github.repo_loader import RepoLoader
@@ -33,6 +34,14 @@ Generate and edit **Java 21 + Spring Boot 3** projects using **Prompt Hub + Gemi
 4. For existing projects — feature branch is created and PR is raised to your GitHub repo
     """,
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 repo_loader = RepoLoader()

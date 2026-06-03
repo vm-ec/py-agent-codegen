@@ -258,10 +258,24 @@ if user_message and prompt_hub:
             st.write(response_message)
 
             # =====================================
+            # ACTION: chat
+            # =====================================
+
+            if action == "chat":
+
+                st.session_state.chat_history.append(
+                    {
+                        "role": "assistant",
+                        "type": "text",
+                        "content": response_message
+                    }
+                )
+
+            # =====================================
             # ACTION: clarify
             # =====================================
 
-            if action == "clarify":
+            elif action == "clarify":
 
                 clarification = decision.get(
                     "needs_clarification", ""

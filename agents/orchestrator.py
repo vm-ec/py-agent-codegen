@@ -30,6 +30,18 @@ class Orchestrator:
             session_context
     ):
 
+        # Quick check for greetings/casual messages
+        msg_lower = user_message.lower().strip()
+        greetings = ['hi', 'hello', 'hey', 'thanks', 'thank you', 'bye', 'goodbye', 'ok', 'okay']
+        
+        if msg_lower in greetings or (len(msg_lower.split()) <= 2 and not any(k in msg_lower for k in ['create', 'generate', 'edit', 'add', 'build', 'make'])):
+            return {
+                "action": "chat",
+                "reason": "casual message",
+                "response_message": "Hello! I'm here to help you generate or edit Spring Boot projects. What would you like to build today?",
+                "needs_clarification": ""
+            }
+
         history_text = "\n".join([
             f"{msg['role'].upper()}: {msg['content']}"
             for msg in conversation_history[-6:]
