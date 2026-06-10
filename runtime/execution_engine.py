@@ -30,65 +30,7 @@ class ExecutionEngine:
             )
         )
 
-        self.execution_order = [
-            "model",
-            "dto",
-            "mapper",
-            "repository",
-            "service",
-            "exception",
-            "controller",
-            "integration-tests",
-            "config"
-        ]
-
         self.generated_files = []
-
-        self.step_dependencies = {
-            "model": [],
-
-            "dto": [
-                "model"
-            ],
-
-            "mapper": [
-                "model",
-                "dto"
-            ],
-
-            "repository": [
-                "model"
-            ],
-
-            "service": [
-                "model",
-                "dto",
-                "mapper",
-                "repository",
-                "exception"
-            ],
-
-            "exception": [
-                "model"
-            ],
-
-            "controller": [
-                "dto",
-                "service",
-                "exception"
-            ],
-
-            "integration-tests": [
-                "controller",
-                "service",
-                "repository"
-            ],
-
-            "config": [
-                "controller",
-                "service"
-            ]
-        }
 
     def clean_response(
             self,
@@ -117,53 +59,27 @@ class ExecutionEngine:
             self,
             step_name
     ):
+        # Deprecated - kept for backward compatibility
+        return []
 
-        required_steps = (
-            self.step_dependencies
-            .get(
-                step_name,
-                []
-            )
-        )
-
-        dependency_files = []
-
-        for generated_file in (
-                self.generated_files
-        ):
-
-            folder = (
-                generated_file
-                .get(
-                    "folder",
-                    ""
-                )
-            )
-
-            if (
-                    folder
-                    in required_steps
-            ):
-                dependency_files.append(
-                    generated_file
-                )
-
-        return dependency_files
-
-    def build_prompt(
+    def build_batch_prompt(
             self,
-            prompt_name,
-            prompt_content,
             story_analysis
     ):
 
-        parent_context = "\n".join(
-            self.prompt_hub[
-                "parent"
-            ][
-                "prompts"
-            ].values()
-        )
+        # Get essential parent prompts only
+        parent_prompts = self.prompt_hub.get("parent", {}).get("prompts", {})
+        essential_parent = [
+            "00_system",
+            "03_exception",
+            "06_logging"
+        ]
+        
+        parent_context = "\n\n".join([
+            f"### {k}\n{v}" 
+            for k, v in parent_prompts.items() 
+            if any(essential in k for essential in essential_parent)
+        ])
 
         child_instructions = (
             self.prompt_hub[
@@ -174,97 +90,124 @@ class ExecutionEngine:
             )
         )
 
-        dependency_files = (
-            self.get_dependency_files(
-                prompt_name
-            )
-        )
-
-        dependency_context = (
-            json.dumps(
-                dependency_files,
-                indent=2
-            )
-        )
-
         return f"""
-You are a senior enterprise
-Java 21 Spring Boot engineer.
+You are a senior enterprise Java 21 Spring Boot 3 engineer.
 
-You MUST follow the
-Prompt Hub strictly.
+You MUST follow the Prompt Hub standards strictly.
 
-You MUST generate
-ONLY what is required
-for the current step.
+You will generate a COMPLETE Spring Boot project in ONE response.
 
-Do NOT assume extra APIs.
-Do NOT add extra methods.
-Do NOT hallucinate.
+=================================================
+PROMPT HUB STANDARDS
+=================================================
 
-PARENT PROMPT HUB:
 {parent_context}
 
-CHILD INSTRUCTIONS:
+=================================================
+CHILD INSTRUCTIONS
+=================================================
+
 {child_instructions}
 
-CURRENT STEP:
-{prompt_name}
+=================================================
+STORY ANALYSIS
+=================================================
 
-STEP PROMPT:
-{prompt_content}
+{json.dumps(story_analysis, indent=2)}
 
-STORY ANALYSIS:
-{json.dumps(
-    story_analysis,
-    indent=2
-)}
+=================================================
+REQUIRED FILES TO GENERATE
+=================================================
 
-DEPENDENCY FILES:
-{dependency_context}
+You MUST generate ALL of the following for EACH entity in the story:
 
-STRICT RULES:
+1. Model/Entity - JPA entity with Lombok annotations
+2. Repository - Spring Data JPA repository interface
+3. Service - Service interface and implementation
+4. Controller - REST controller with CRUD endpoints
+5. DTO - Request and Response DTOs
+6. Mapper - MapStruct mapper interface
+7. Exception - Custom exception classes
+8. Tests - Integration tests for controller
+9. Config - Application configuration classes
 
-1. Generate ONLY
-the current step.
+=================================================
+STRICT REQUIREMENTS
+=================================================
 
-2. Follow Java 21.
+- Use Java 21
+- Use Spring Boot 3
+- Use Lombok for all classes
+- Use MapStruct for entity-DTO mapping
+- Use JUnit 5 + Mockito for tests
+- Follow REST best practices
+- Include proper validation
+- Include proper error handling
+- Generate ONLY what the story requires (no extra features)
+- Each file must be COMPLETE and COMPILABLE
 
-3. Follow Spring Boot 3.
+=================================================
+CRITICAL: FOLDER FIELD RULES
+=================================================
 
-4. Use Lombok.
+You MUST use EXACTLY these folder values based on file type:
 
-5. Use MapStruct.
+- Entity/Model classes (e.g., Claim.java, Product.java) → "folder": "model"
+- Repository interfaces (e.g., ClaimRepository.java) → "folder": "repository"
+- Service interfaces (e.g., ClaimService.java) → "folder": "service"
+- Service implementations (e.g., ClaimServiceImpl.java) → "folder": "service"
+- Controller classes (e.g., ClaimController.java) → "folder": "controller"
+- Request DTOs (e.g., ClaimRequest.java) → "folder": "dto"
+- Response DTOs (e.g., ClaimResponse.java) → "folder": "dto"
+- Mapper interfaces (e.g., ClaimMapper.java) → "folder": "mapper"
+- Exception classes (e.g., ClaimNotFoundException.java) → "folder": "exception"
+- Config classes (e.g., SwaggerConfig.java) → "folder": "config"
+- Test classes (e.g., ClaimControllerTest.java) → "folder": "integration-tests"
+- Root files (pom.xml, application.yml) → "folder": ""
 
-6. Use Mockito.
+DO NOT use any other folder values. DO NOT use full package paths.
 
-7. Use JUnit 5.
+=================================================
+OUTPUT FORMAT - RETURN EXACT JSON STRUCTURE
+=================================================
 
-8. Return COMPLETE FILES.
+IMPORTANT: The "folder" field must be ONLY the folder type, not full path.
 
-9. NO markdown.
+Valid folder values: "model", "repository", "service", "controller", "dto", "mapper", "exception", "config", "integration-tests"
 
-10. NO ```json
-
-11. Generate ONLY
-what story requires.
-
-Return STRICT JSON:
+For root files like pom.xml, use empty string: "folder": ""
 
 {{
   "files": [
     {{
-      "file_name":
-      "StudentService.java",
-
-      "folder":
-      "service",
-
-      "content":
-      "full java code"
+      "file_name": "Claim.java",
+      "folder": "model",
+      "content": "package com.example.project.model;\n\nimport lombok.Data;\n..."
+    }},
+    {{
+      "file_name": "ClaimRepository.java",
+      "folder": "repository",
+      "content": "package com.example.project.repository;\n..."
+    }},
+    {{
+      "file_name": "ClaimService.java",
+      "folder": "service",
+      "content": "package com.example.project.service;\n..."
+    }},
+    {{
+      "file_name": "ClaimController.java",
+      "folder": "controller",
+      "content": "package com.example.project.controller;\n..."
+    }},
+    {{
+      "file_name": "pom.xml",
+      "folder": "",
+      "content": "<?xml version=\"1.0\"...>"
     }}
   ]
 }}
+
+Generate ALL files now. Return ONLY valid JSON. NO markdown. NO explanations.
 """
 
     def extract_files_manually(
@@ -323,39 +266,18 @@ Return STRICT JSON:
 
         return files
 
-    def execute_step(
+    def execute_batch(
             self,
-            step_name,
             story_analysis
     ):
 
-        child_prompts = (
-            self.prompt_hub[
-                "child"
-            ][
-                "prompts"
-            ]
-        )
-
-        if (
-                step_name
-                not in child_prompts
-        ):
-            return []
-
-        prompt_content = (
-            child_prompts[
-                step_name
-            ]
-        )
-
         final_prompt = (
-            self.build_prompt(
-                step_name,
-                prompt_content,
+            self.build_batch_prompt(
                 story_analysis
             )
         )
+
+        print("[ExecutionEngine] Generating all files in batch mode...")
 
         try:
 
@@ -369,8 +291,7 @@ Return STRICT JSON:
             if not response or not response.text:
                 print(
                     f"[ExecutionEngine] "
-                    f"Empty response for step: {step_name} "
-                    f"- possible quota exhaustion or prompt too large"
+                    f"Empty response - possible quota exhaustion"
                 )
                 return []
 
@@ -381,17 +302,17 @@ Return STRICT JSON:
             if "429" in error_msg or "quota" in error_msg.lower():
                 print(
                     f"[ExecutionEngine] "
-                    f"API quota exhausted for step: {step_name}"
+                    f"API quota exhausted"
                 )
             elif "400" in error_msg or "too large" in error_msg.lower():
                 print(
                     f"[ExecutionEngine] "
-                    f"Prompt too large for step: {step_name}"
+                    f"Prompt too large"
                 )
             else:
                 print(
                     f"[ExecutionEngine] "
-                    f"Gemini API error for step {step_name}: {error_msg}"
+                    f"Gemini API error: {error_msg}"
                 )
 
             return []
@@ -401,6 +322,10 @@ Return STRICT JSON:
                 response.text
             )
         )
+
+        print("\n========== BATCH AI RESPONSE ==========\n")
+        print(cleaned_response[:500])  # Print first 500 chars
+        print("\n=======================================\n")
 
         try:
 
@@ -422,12 +347,15 @@ Return STRICT JSON:
                 files
             )
 
+            print(f"[ExecutionEngine] Generated {len(files)} files in batch")
+
             return files
 
-        except Exception:
+        except Exception as parse_error:
 
-            # Try strict=False to handle
-            # unescaped control characters
+            print(f"[ExecutionEngine] JSON parse failed: {parse_error}")
+
+            # Try strict=False to handle unescaped control characters
             try:
 
                 parsed_response = json.loads(
@@ -445,8 +373,7 @@ Return STRICT JSON:
 
             except Exception:
 
-                # Last resort — use regex to
-                # extract each file block manually
+                # Last resort — use regex
                 return self.extract_files_manually(
                     cleaned_response
                 )
@@ -456,21 +383,32 @@ Return STRICT JSON:
             story_analysis
     ):
 
-        execution_result = {}
+        # Batch generation - all files in one call
+        all_files = self.execute_batch(
+            story_analysis
+        )
 
-        for step in (
-                self.execution_order
-        ):
+        # Group files by folder for compatibility
+        execution_result = {
+            "model": [],
+            "dto": [],
+            "mapper": [],
+            "repository": [],
+            "service": [],
+            "exception": [],
+            "controller": [],
+            "integration-tests": [],
+            "config": []
+        }
 
-            step_result = (
-                self.execute_step(
-                    step,
-                    story_analysis
-                )
-            )
-
-            execution_result[
-                step
-            ] = step_result
+        for file in all_files:
+            folder = file.get("folder", "misc")
+            if folder in execution_result:
+                execution_result[folder].append(file)
+            else:
+                # Handle misc files
+                if "misc" not in execution_result:
+                    execution_result["misc"] = []
+                execution_result["misc"].append(file)
 
         return execution_result

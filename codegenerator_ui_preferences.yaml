@@ -12,6 +12,29 @@ ui_preferences:
       placeholder: "e.g. https://github.com/org/project"
       default: ""
 
+    - name: "github_username"
+      label: "GitHub Username (Optional)"
+      component_type: "text"
+      placeholder: "e.g. your-username"
+      default: ""
+
+    - name: "github_token"
+      label: "GitHub PAT Token (Optional)"
+      component_type: "password"
+      placeholder: "e.g. ghp_your_token_here"
+      default: ""
+
+    - name: "branch_name"
+      label: "Branch Name (Optional)"
+      component_type: "text"
+      placeholder: "e.g. main or feature/my-branch"
+      default: ""
+
+    - name: "push_to_github"
+      label: "Push to GitHub after generation"
+      component_type: "checkbox"
+      default: false
+
   outputs:
     data_mapping:
       - key: "status"

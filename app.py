@@ -1,5 +1,6 @@
 import streamlit as st
 import sys
+import os
 
 # Force logs to appear in Render
 print("========== APP STARTING ==========", flush=True)
@@ -133,8 +134,52 @@ with st.sidebar:
 
     if repo_url.strip():
         st.info("🔧 Mode: Edit Existing Project")
+        
+        github_username = st.text_input(
+            "GitHub Username",
+            placeholder="your-username",
+            help="Optional: Override .env credentials"
+        )
+        
+        github_token = st.text_input(
+            "GitHub PAT Token",
+            type="password",
+            placeholder="ghp_your_token_here",
+            help="Optional: Override .env credentials"
+        )
+        
+        branch_name = st.text_input(
+            "Branch Name (Optional)",
+            placeholder="feature/my-branch or main",
+            help="Leave empty to auto-generate from prompt"
+        )
     else:
         st.info("🆕 Mode: New Project")
+        
+        github_username = st.text_input(
+            "GitHub Username (Optional)",
+            placeholder="your-username",
+            help="Fill to push generated project to GitHub"
+        )
+        
+        github_token = st.text_input(
+            "GitHub PAT Token (Optional)",
+            type="password",
+            placeholder="ghp_your_token_here",
+            help="Fill to push generated project to GitHub"
+        )
+        
+        branch_name = st.text_input(
+            "Branch Name (Optional)",
+            placeholder="main or feature/my-branch",
+            help="Leave empty to auto-generate from prompt"
+        )
+        
+        push_to_github = st.checkbox(
+            "Push to GitHub after generation",
+            value=False,
+            help="Create repo and push generated code to GitHub"
+        )
 
     st.divider()
 
@@ -370,13 +415,17 @@ Provide a clear, concise explanation.
                         "Pushing branch and raising PR..."
                     ):
 
-                        git_manager = GitManager()
+                        git_manager = GitManager(
+                            github_username=github_username if github_username else None,
+                            github_token=github_token if github_token else None
+                        )
 
                         pr_result = (
                             git_manager.push_and_raise_pr(
                                 repo_path,
                                 repo_name,
-                                user_message
+                                user_message,
+                                branch_name=branch_name if branch_name else None
                             )
                         )
 
@@ -493,7 +542,10 @@ Provide a clear, concise explanation.
                             clone_result["repo_name"],
                             project_analysis,
                             impact_result,
-                            user_message
+                            user_message,
+                            github_username=github_username if github_username else None,
+                            github_token=github_token if github_token else None,
+                            branch_name=branch_name if branch_name else None
                         )
 
                         edit_result = (
@@ -595,47 +647,70 @@ Provide a clear, concise explanation.
 
                 execution_result = {}
 
-                execution_order = [
-                    "model",
-                    "dto",
-                    "mapper",
-                    "repository",
-                    "service",
-                    "exception",
-                    "controller",
-                    "integration-tests",
-                    "config"
-                ]
-
-                progress = st.progress(0)
-
-                for index, step in enumerate(
-                    execution_order
+                # Batch generation - single API call
+                with st.spinner(
+                    "Generating all project files..."
                 ):
 
-                    with st.spinner(
-                        f"Generating: {step}..."
-                    ):
-
-                        files = (
-                            execution_engine
-                            .execute_step(
-                                step,
-                                story_analysis
-                            )
+                    all_files = (
+                        execution_engine
+                        .execute_batch(
+                            story_analysis
                         )
-
-                        if not files:
-                            st.warning(
-                                f"⚠️ No files generated for `{step}` "
-                                f"— possible API quota exhaustion or prompt too large"
-                            )
-
-                        execution_result[step] = files
-
-                    progress.progress(
-                        (index + 1) / len(execution_order)
                     )
+
+                    print(f"[APP] Received {len(all_files)} files from batch generation")
+
+                    # Group by folder for file writer
+                    execution_order = [
+                        "model",
+                        "dto",
+                        "mapper",
+                        "repository",
+                        "service",
+                        "exception",
+                        "controller",
+                        "integration-tests",
+                        "config"
+                    ]
+
+                    # Initialize with empty lists
+                    for folder in execution_order:
+                        execution_result[folder] = []
+
+                    # Group all files by folder
+                    for f in all_files:
+                        folder = f.get("folder", "")
+                        print(f"[APP] File: {f.get('file_name')} has folder: '{folder}'")
+                        
+                        if folder in execution_order:
+                            execution_result[folder].append(f)
+                        else:
+                            # Handle files with empty or unknown folder
+                            if not folder:
+                                # Root level files like pom.xml
+                                if "misc" not in execution_result:
+                                    execution_result["misc"] = []
+                                execution_result["misc"].append(f)
+                            else:
+                                # Try to match partial folder names
+                                matched = False
+                                for known_folder in execution_order:
+                                    if known_folder in folder.lower():
+                                        execution_result[known_folder].append(f)
+                                        matched = True
+                                        break
+                                if not matched:
+                                    if "misc" not in execution_result:
+                                        execution_result["misc"] = []
+                                    execution_result["misc"].append(f)
+
+                    print(f"[APP] Grouped files: {[(k, len(v)) for k, v in execution_result.items()]}")
+
+                    if not all_files:
+                        st.error(
+                            "⚠️ No files generated - possible API quota exhaustion"
+                        )
 
                 project_name = (
                     story_analysis
@@ -664,22 +739,78 @@ Provide a clear, concise explanation.
 
                 st.session_state["zip_path"] = zip_path
 
+                # Verify ZIP was created successfully
+                if not os.path.exists(zip_path):
+                    st.warning("⚠️ ZIP file creation failed")
+                else:
+                    st.success(f"✅ ZIP created: {zip_path}")
+
                 # Save to session context
-                st.session_state.session_context.update(
-                    {
-                        "last_action": "generate_project",
-                        "project_name": project_name,
-                        "project_path": project_path,
-                        "zip_path": zip_path,
-                        "story_analysis": story_analysis,
-                        "files_generated": len(write_results)
-                    }
-                )
+                session_data = {
+                    "last_action": "generate_project",
+                    "project_name": project_name,
+                    "project_path": project_path,
+                    "zip_path": zip_path,
+                    "story_analysis": story_analysis,
+                    "files_generated": len(write_results)
+                }
+
+                st.session_state.session_context.update(session_data)
 
                 msg = (
                     f"✅ Project **{project_name}** generated successfully!\n\n"
-                    f"📦 {len(write_results)} files created. Download the ZIP below."
+                    f"📦 {len(write_results)} files created."
                 )
+
+                # Push to GitHub if checkbox is enabled
+                if push_to_github:
+
+                    print(f"[APP] Push to GitHub enabled, checkbox: {push_to_github}")
+                    print(f"[APP] Username provided: {bool(github_username)}, Token provided: {bool(github_token)}")
+
+                    with st.spinner("Pushing to GitHub..."):
+
+                        from github.git_manager import GitManager
+
+                        git_manager = GitManager(
+                            github_username=github_username if github_username else None,
+                            github_token=github_token if github_token else None
+                        )
+
+                        push_result = git_manager.push_and_raise_pr(
+                            project_path,
+                            project_name,
+                            f"Initial commit: {user_message[:50]}",
+                            branch_name=branch_name if branch_name else None
+                        )
+
+                    if push_result.get("success"):
+
+                        branch = push_result.get("branch")
+                        pr_url = push_result.get("pr_url")
+                        github_repo_url = (
+                            f"https://github.com/"
+                            f"{git_manager.github_username}/"
+                            f"{project_name}"
+                        )
+
+                        st.session_state.session_context["branch"] = branch
+                        st.session_state.session_context["github_repo_url"] = github_repo_url
+
+                        msg += f"\n\n🚀 Pushed to GitHub: [{github_repo_url}]({github_repo_url})"
+                        msg += f"\n📌 Branch: `{branch}`"
+
+                        if pr_url:
+                            msg += f"\n🔗 [View Pull Request]({pr_url})"
+                        
+                        msg += "\n\n⬇️ Download the ZIP below."
+
+                    else:
+                        msg += f"\n\n⚠️ GitHub push failed: {push_result.get('error')}"
+                        msg += "\n\n⬇️ Download the ZIP below."
+
+                else:
+                    msg += "\n\n⬇️ Download the ZIP below."
 
                 st.markdown(msg)
 

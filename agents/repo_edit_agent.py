@@ -211,12 +211,19 @@ class RepoEditAgent:
             "has_dto": has_dto,
             "has_service_impl": has_service_impl,
             "has_generic_response": project_analysis.get("has_generic_response"),
-            "controllers": project_analysis.get("controllers", []),
-            "repositories": project_analysis.get("repositories", [])
+            "controller_count": len(project_analysis.get("controllers", [])),
+            "repository_count": len(project_analysis.get("repositories", []))
         }
 
         prompt_hub_context = (
             self.extract_prompt_hub_context()
+        )
+
+        # Extract example files from repo
+        example_files_context = (
+            self.build_example_files_context(
+                project_analysis
+            )
         )
 
         return f"""
@@ -225,13 +232,19 @@ You are a senior Java Spring Boot architect.
 You are adding a NEW MODULE to an EXISTING repository.
 
 Your coding standards come from the Prompt Hub below.
-You MUST adapt the generated code to match the existing repository style.
+You MUST adapt the generated code to match the EXAMPLE FILES from the repository.
 
 =================================================
-PROMPT HUB STANDARDS
+PROMPT HUB STANDARDS (Essential Rules Only)
 =================================================
 
 {prompt_hub_context}
+
+=================================================
+EXAMPLE FILES FROM REPOSITORY (Follow These Patterns EXACTLY)
+=================================================
+
+{example_files_context}
 
 =================================================
 REPOSITORY CONTEXT
@@ -311,6 +324,38 @@ OUTPUT FORMAT — RETURN EXACTLY THIS STRUCTURE
 """
 
     # ----------------------------------
+    # Build Example Files Context
+    # ----------------------------------
+
+    def build_example_files_context(
+            self,
+            project_analysis
+    ):
+
+        context = []
+        example_files = project_analysis.get("example_files", {})
+
+        if "controller" in example_files:
+            context.append(
+                f"### EXAMPLE CONTROLLER\n```java\n{example_files['controller']}\n```"
+            )
+
+        if "service" in example_files:
+            context.append(
+                f"### EXAMPLE SERVICE\n```java\n{example_files['service']}\n```"
+            )
+
+        if "repository" in example_files:
+            context.append(
+                f"### EXAMPLE REPOSITORY\n```java\n{example_files['repository']}\n```"
+            )
+
+        if not context:
+            return "No example files available. Follow Spring Boot best practices."
+
+        return "\n\n".join(context)
+
+    # ----------------------------------
     # Extract Prompt Hub Context
     # ----------------------------------
 
@@ -322,6 +367,7 @@ OUTPUT FORMAT — RETURN EXACTLY THIS STRUCTURE
 
         try:
 
+            # Only include critical parent prompts to reduce tokens
             parent_prompts = (
                 self.prompt_hub
                 .get(
@@ -334,61 +380,26 @@ OUTPUT FORMAT — RETURN EXACTLY THIS STRUCTURE
                 )
             )
 
-            child_prompts = (
-                self.prompt_hub
-                .get(
-                    "child",
-                    {}
-                )
-                .get(
-                    "prompts",
-                    {}
-                )
-            )
+            # Filter only essential parent prompts to reduce token usage
+            essential_parent = [
+                "00_system",
+                "03_exception",
+                "06_logging"
+            ]
 
-            enhancement_prompts = (
-                self.prompt_hub
-                .get(
-                    "enhancement",
-                    {}
-                )
-                .get(
-                    "prompts",
-                    {}
-                )
-            )
+            filtered_parent = {
+                k: v for k, v in parent_prompts.items()
+                if any(essential in k for essential in essential_parent)
+            }
 
+            # Skip child prompts to save tokens - rely on repo analysis instead
+
+            # Only include filtered essential prompts
             for (
                     prompt_name,
                     prompt_content
             ) in (
-                    parent_prompts.items()
-            ):
-
-                context.append(
-                    f"\n### "
-                    f"{prompt_name}\n"
-                    f"{prompt_content}"
-                )
-
-            for (
-                    prompt_name,
-                    prompt_content
-            ) in (
-                    child_prompts.items()
-            ):
-
-                context.append(
-                    f"\n### "
-                    f"{prompt_name}\n"
-                    f"{prompt_content}"
-                )
-
-            for (
-                    prompt_name,
-                    prompt_content
-            ) in (
-                    enhancement_prompts.items()
+                    filtered_parent.items()
             ):
 
                 context.append(

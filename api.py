@@ -102,6 +102,30 @@ class NewProjectRequest(BaseModel):
         )
     )
 
+    github_username: Optional[str] = Field(
+        None,
+        description="GitHub username for pushing code (overrides .env)",
+        example="your-github-username"
+    )
+
+    github_token: Optional[str] = Field(
+        None,
+        description="GitHub Personal Access Token (overrides .env)",
+        example="ghp_your_token_here"
+    )
+
+    branch_name: Optional[str] = Field(
+        None,
+        description="Branch name to push code (if empty, auto-generates from story)",
+        example="main"
+    )
+
+    push_to_github: bool = Field(
+        False,
+        description="Whether to push generated project to GitHub",
+        example=True
+    )
+
 
 class EditProjectRequest(BaseModel):
 
@@ -118,6 +142,24 @@ class EditProjectRequest(BaseModel):
             "Add a vehicle management module "
             "with CRUD APIs following existing patterns"
         )
+    )
+
+    github_username: Optional[str] = Field(
+        None,
+        description="GitHub username for pushing code (overrides .env)",
+        example="your-github-username"
+    )
+
+    github_token: Optional[str] = Field(
+        None,
+        description="GitHub Personal Access Token (overrides .env)",
+        example="ghp_your_token_here"
+    )
+
+    branch_name: Optional[str] = Field(
+        None,
+        description="Branch name to push code (if empty, auto-generates from instructions)",
+        example="feature/add-vehicle-api"
     )
 
 
@@ -166,6 +208,21 @@ class NewProjectResponse(BaseModel):
                 "file": "src/main/java/com/example/studentmanagement/model/Student.java"
             }
         ]
+    )
+
+    branch: Optional[str] = Field(
+        None,
+        example="main"
+    )
+
+    pr_url: Optional[str] = Field(
+        None,
+        example="https://github.com/your-username/StudentManagement/pull/1"
+    )
+
+    github_repo_url: Optional[str] = Field(
+        None,
+        example="https://github.com/your-username/StudentManagement"
     )
 
 
@@ -269,28 +326,28 @@ def generate_project(
         prompt_hub
     )
 
-    execution_result = {}
+    # Batch generation - single API call
+    all_files = execution_engine.execute_batch(
+        story_analysis
+    )
 
-    execution_order = [
-        "model",
-        "dto",
-        "mapper",
-        "repository",
-        "service",
-        "exception",
-        "controller",
-        "integration-tests",
-        "config"
-    ]
+    # Group by folder
+    execution_result = {
+        "model": [],
+        "dto": [],
+        "mapper": [],
+        "repository": [],
+        "service": [],
+        "exception": [],
+        "controller": [],
+        "integration-tests": [],
+        "config": []
+    }
 
-    for step in execution_order:
-
-        files = execution_engine.execute_step(
-            step,
-            story_analysis
-        )
-
-        execution_result[step] = files
+    for file in all_files:
+        folder = file.get("folder", "misc")
+        if folder in execution_result:
+            execution_result[folder].append(file)
 
     project_name = (
         story_analysis
@@ -315,7 +372,7 @@ def generate_project(
 
     zip_path = zip_manager.create_zip(project_path)
 
-    return {
+    result = {
         "status": "success",
         "project_name": project_name,
         "project_path": project_path,
@@ -323,6 +380,34 @@ def generate_project(
         "story_analysis": story_analysis,
         "write_results": write_results
     }
+
+    # Push to GitHub if requested
+    if request.push_to_github:
+
+        from github.git_manager import GitManager
+
+        git_manager = GitManager(
+            github_username=request.github_username,
+            github_token=request.github_token
+        )
+
+        push_result = git_manager.push_and_raise_pr(
+            project_path,
+            project_name,
+            f"Initial commit: {request.story[:50]}",
+            branch_name=request.branch_name
+        )
+
+        if push_result.get("success"):
+            result["branch"] = push_result.get("branch")
+            result["pr_url"] = push_result.get("pr_url")
+            result["github_repo_url"] = (
+                f"https://github.com/"
+                f"{git_manager.github_username}/"
+                f"{project_name}"
+            )
+
+    return result
 
 
 # ----------------------------------
@@ -386,7 +471,10 @@ def edit_project(
         clone_result["repo_name"],
         project_analysis,
         impact_result,
-        request.instructions
+        request.instructions,
+        github_username=request.github_username,
+        github_token=request.github_token,
+        branch_name=request.branch_name
     )
 
     edit_result = edit_engine.edit_project()

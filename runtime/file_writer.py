@@ -124,6 +124,74 @@ class FileWriter:
 
         return file_name
 
+    def detect_folder_from_filename(
+            self,
+            file_name
+    ):
+        """
+        Auto-detect correct folder based on file name patterns.
+        This overrides incorrect AI folder assignments.
+        """
+        if not file_name:
+            return None
+
+        lower_name = file_name.lower()
+
+        # Controller files
+        if "controller" in lower_name and "test" not in lower_name:
+            return "controller"
+
+        # Repository files
+        if "repository" in lower_name:
+            return "repository"
+
+        # Service files (not ServiceImpl)
+        if "service" in lower_name:
+            return "service"
+
+        # Mapper files
+        if "mapper" in lower_name:
+            return "mapper"
+
+        # DTO files (Request/Response)
+        if "request" in lower_name or "response" in lower_name or "dto" in lower_name:
+            return "dto"
+
+        # Exception files
+        if "exception" in lower_name or lower_name.endswith("notfoundexception.java"):
+            return "exception"
+
+        # Config files
+        if "config" in lower_name or "configuration" in lower_name:
+            return "config"
+
+        # Test files
+        if "test" in lower_name:
+            return "integration-tests"
+
+        # Application main class
+        if "application.java" in lower_name:
+            return None  # Root level
+
+        # Entity/Model files - if ends with .java and no other keywords
+        # This catches files like Claim.java, Product.java, Employee.java
+        if (
+            lower_name.endswith(".java") 
+            and "controller" not in lower_name
+            and "service" not in lower_name
+            and "repository" not in lower_name
+            and "mapper" not in lower_name
+            and "exception" not in lower_name
+            and "config" not in lower_name
+            and "request" not in lower_name
+            and "response" not in lower_name
+            and "test" not in lower_name
+            and "application" not in lower_name
+        ):
+            return "model"
+
+        return None
+
     def write_file(
             self,
             generated_file
@@ -151,11 +219,23 @@ class FileWriter:
                 )
             )
 
-            folder_path = (
-                self.get_folder_path(
-                    folder
+            # Auto-detect folder from file name if AI gave wrong folder
+            detected_folder = self.detect_folder_from_filename(file_name)
+            if detected_folder:
+                folder = detected_folder
+                print(f"[FileWriter] Auto-corrected folder for {file_name}: '{generated_file.get('folder')}' → '{folder}'")
+
+            # Handle root files (pom.xml, application.yml, etc.)
+            if not folder or folder == "" or file_name in [
+                "pom.xml", "application.yml", "application.properties"
+            ]:
+                folder_path = self.project_path
+            else:
+                folder_path = (
+                    self.get_folder_path(
+                        folder
+                    )
                 )
-            )
 
             os.makedirs(
                 folder_path,
@@ -204,15 +284,21 @@ class FileWriter:
 
         write_results = []
 
-        for _, files in (
+        print(f"[FileWriter] Starting to write files...")
+        print(f"[FileWriter] Execution result keys: {list(execution_result.keys())}")
+
+        for folder_key, files in (
                 execution_result
                 .items()
         ):
+
+            print(f"[FileWriter] Processing folder: {folder_key}, files count: {len(files) if isinstance(files, list) else 0}")
 
             if not isinstance(
                     files,
                     list
             ):
+                print(f"[FileWriter] Skipping {folder_key} - not a list")
                 continue
 
             for generated_file in files:
@@ -221,7 +307,10 @@ class FileWriter:
                         "file_name"
                         not in generated_file
                 ):
+                    print(f"[FileWriter] Skipping file - no file_name field")
                     continue
+
+                print(f"[FileWriter] Writing: {generated_file.get('file_name')} in folder: {generated_file.get('folder')}")
 
                 result = (
                     self.write_file(
@@ -229,8 +318,11 @@ class FileWriter:
                     )
                 )
 
+                print(f"[FileWriter] Result: {result.get('status')} - {result.get('file', result.get('error'))}")
+
                 write_results.append(
                     result
                 )
 
+        print(f"[FileWriter] Total files written: {len(write_results)}")
         return write_results

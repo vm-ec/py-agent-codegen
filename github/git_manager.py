@@ -11,13 +11,19 @@ from config.settings import (
 
 class GitManager:
 
-    def __init__(self):
+    def __init__(
+            self,
+            github_username=None,
+            github_token=None
+    ):
 
         self.github_token = (
+            github_token or
             settings.GITHUB1_TOKEN
         )
 
         self.github_username = (
+            github_username or
             settings.GITHUB1_USERNAME
         )
 
@@ -293,16 +299,19 @@ class GitManager:
             self,
             repo_path,
             repo_name,
-            user_prompt
+            user_prompt,
+            branch_name=None
     ):
 
         try:
 
-            branch_name = (
-                self.generate_branch_name(
-                    user_prompt
+            # Use provided branch or auto-generate
+            if not branch_name:
+                branch_name = (
+                    self.generate_branch_name(
+                        user_prompt
+                    )
                 )
-            )
 
             # Re-init git to strip original
             # history — avoids unrelated histories

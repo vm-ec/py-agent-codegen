@@ -324,9 +324,18 @@ class ProjectAnalyzer:
             analysis
     ):
 
-        for java_file in analysis[
-            "java_files"
-        ]:
+        # Limit to first 3 files of each type to reduce token usage
+        sample_files = (
+            analysis["controllers"][:3] +
+            analysis["services"][:3] +
+            analysis["repositories"][:3] +
+            analysis["models"][:3]
+        )
+
+        # Store example files for hybrid prompt approach
+        analysis["example_files"] = {}
+
+        for java_file in sample_files:
 
             try:
 
@@ -407,6 +416,21 @@ class ProjectAnalyzer:
                             ] = (
                                 package_name
                             )
+
+                # -------------------------
+                # Store example file content
+                # -------------------------
+
+                lower_path = java_file.lower()
+
+                if "controller" in lower_path and "controller" not in analysis["example_files"]:
+                    analysis["example_files"]["controller"] = content
+
+                elif "service" in lower_path and "impl" not in lower_path and "service" not in analysis["example_files"]:
+                    analysis["example_files"]["service"] = content
+
+                elif "repository" in lower_path and "repository" not in analysis["example_files"]:
+                    analysis["example_files"]["repository"] = content
 
                 # -------------------------
                 # MapStruct

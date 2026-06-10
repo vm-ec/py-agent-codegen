@@ -20,7 +20,10 @@ class EditEngine:
             repo_name,
             project_analysis,
             impact_analysis,
-            user_prompt
+            user_prompt,
+            github_username=None,
+            github_token=None,
+            branch_name=None
     ):
 
         self.prompt_hub = prompt_hub
@@ -29,6 +32,7 @@ class EditEngine:
         self.project_analysis = project_analysis
         self.impact_analysis = impact_analysis
         self.user_prompt = user_prompt
+        self.branch_name = branch_name
 
         self.repo_edit_agent = (
             RepoEditAgent(prompt_hub)
@@ -41,7 +45,10 @@ class EditEngine:
             )
         )
 
-        self.git_manager = GitManager()
+        self.git_manager = GitManager(
+            github_username=github_username,
+            github_token=github_token
+        )
 
     # ----------------------------------
     # Main Edit Flow
@@ -78,7 +85,8 @@ class EditEngine:
                 .push_and_raise_pr(
                     self.repo_path,
                     self.repo_name,
-                    self.user_prompt
+                    self.user_prompt,
+                    branch_name=self.branch_name
                 )
             )
 
